@@ -1,0 +1,58 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+const char* ssid = "YourWiFi";
+const char* password = "YourPassword";
+const String serverUrl = "https://your-backend-url/api/sensors";
+
+#define ONE_WIRE_BUS D4
+const int pulsePin = A0;
+
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature tempSensor(&oneWire);
+
+void setup() {
+  Serial.begin(115200);
+  tempSensor.begin();
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+  }
+  Serial.println("WiFi Connected!");
+}
+
+void loop() {
+  // Read pulse
+  int pulseValue = analogRead(pulsePin);
+  int pulse = map(pulseValue, 0, 1023, 60, 100);
+
+  // Read temperature
+  tempSensor.requestTemperatures();
+  float tempC = tempSensor.getTempCByIndex(0);
+  float tempF = tempC * 1.8 + 32;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  HTTPClient http;
+  http.begin(client, serverUrl);
+  http.addHeader("Content-Type", "application/json");
+
+  String payload = "{\"pulse\":" + String(pulse) +
+                   ",\"temperature\":" + String(tempF) +
+                   ",\"spo2\":98}";
+
+  int response = http.POST(payload);
+
+  Serial.println("Sent → " + payload);
+  Serial.println("Response Code: " + String(response));
+
+  http.end();
+
+  delay(15000);
+}
